@@ -73,13 +73,17 @@ Validated on 2026-10-09 with local workerd/D1 and real 北极小站 Auth0:
 
 Desktop, mobile and browser extension apps have not been manually exercised. Native-client server URL is `https://bw.hasbai.xyz`; select SSO identifier `hasbai`. CLI login and vault unlock are separate commands. First vault-key initialization requires the Web Vault.
 
+Browser-extension SSO opens the Web Vault with client callback and PKCE parameters. The initial external-client route automatically selects `hasbai` while preserving those parameters; callback routes are left intact. Anonymous organization-domain discovery returns an empty list because this personal service has no organization domains. Enter the email before selecting SSO, authenticate with Auth0, then unlock with the vault master password.
+
 Browser tests use existing test credentials from `AUTH0_TEST_ENV_FILE` (local default is the North Station checkout `.env`); never commit these credentials. Local test master passwords and session tokens are written only to ignored `.secrets/` files. Local HTTPS uses Wrangler's development certificate; the following TLS exception is restricted to these local tests. Production tests use normal certificate verification and stop before setting a master password.
 
 ```sh
 node tests/crypto.mjs
 node tests/auth0.mjs
+node tests/sso-entry.mjs
 NODE_TLS_REJECT_UNAUTHORIZED=0 node tests/maintenance.mjs
 NODE_TLS_REJECT_UNAUTHORIZED=0 node tests/sso-protocol.mjs
+NODE_TLS_REJECT_UNAUTHORIZED=0 node tests/browser-sso.mjs
 node tests/web-vault.mjs
 NODE_TLS_REJECT_UNAUTHORIZED=0 node tests/import-large.mjs
 NODE_TLS_REJECT_UNAUTHORIZED=0 node tests/integration.mjs
@@ -87,6 +91,7 @@ node tests/web-vault.mjs # verify changed password decrypts existing data
 NODE_TLS_REJECT_UNAUTHORIZED=0 node tests/cli.mjs
 NODE_TLS_REJECT_UNAUTHORIZED=0 node tests/verifier-rate.mjs
 node --use-env-proxy tests/production.mjs
+VAULT_ORIGIN=https://bw.hasbai.xyz node --use-env-proxy tests/browser-sso.mjs
 ```
 
 

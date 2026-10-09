@@ -154,6 +154,11 @@ async fn route(req: &mut Request, env: &Env) -> ApiResult<Response> {
             json!({"version":"2026.6.0","server":{"name":"Vaultwarden Worker (personal)","url":"https://github.com/hasbai/vaultwarden"},"settings":{"disableUserRegistration":true,"suppressOnboardingInterstitials":true},"environment":{"vault":d,"api":format!("{d}/api"),"identity":format!("{d}/identity"),"notifications":format!("{d}/notifications"),"sso":format!("{d}/identity"),"cloudRegion":null},"push":{"pushTechnology":0,"vapidPublicKey":null},"featureStates":{"pm-19148-innovation-archive":true},"communication":null,"object":"config"}),
         );
     }
+    // Clients discover claimed organization domains before authentication.
+    // This personal service has no organizations; callers can use hasbai.
+    if path == "/api/organizations/domain/sso/verified" && method == Method::Post {
+        return response(json!({"data":[],"object":"list","continuationToken":null}));
+    }
     if matches!(
         path.as_str(),
         "/identity/accounts/prelogin" | "/identity/accounts/prelogin/password" | "/api/accounts/prelogin"

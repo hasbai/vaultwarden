@@ -1,4 +1,14 @@
 // The stock Web Vault SSO protocol remains unchanged; select our single IdP.
+// External clients supply their own PKCE and callback state. Preserve them
+// while selecting the provider before the stock SSO component initializes.
+const [ssoRoute, ssoQuery = ''] = location.hash.slice(1).split('?');
+const ssoParams = new URLSearchParams(ssoQuery);
+if (ssoRoute === '/sso' &&
+    ['clientId', 'redirectUri', 'state', 'codeChallenge'].every(key => ssoParams.get(key)) &&
+    !['identifier', 'code', 'error', 'error_description'].some(key => ssoParams.has(key))) {
+  ssoParams.set('identifier', 'hasbai');
+  history.replaceState(null, '', `${location.pathname}${location.search}#/sso?${ssoParams}`);
+}
 document.addEventListener('click',event=>{
   if(event.target.closest?.('.vw-sso-login')) {
     event.preventDefault();event.stopImmediatePropagation();

@@ -1,6 +1,11 @@
 import assert from 'node:assert/strict';
 import {randomBytes,createHash} from 'node:crypto';
 const origin='https://localhost:8787';
+const discovery=await fetch(origin+'/api/organizations/domain/sso/verified',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({email:'sso-test@example.invalid'})});
+assert.equal(discovery.status,200);
+assert.deepEqual(await discovery.json(),{data:[],object:'list',continuationToken:null});
+assert.equal((await fetch(origin+'/api/organizations/domain/sso/verified')).status,401);
+assert.equal((await fetch(origin+'/api/sync')).status,401);
 const verifier=randomBytes(48).toString('base64url');
 const challenge=createHash('sha256').update(verifier).digest('base64url');
 const pre=await fetch(origin+'/identity/sso/prevalidate?domainHint=hasbai');assert.equal(pre.status,200);

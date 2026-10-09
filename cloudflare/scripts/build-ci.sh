@@ -18,4 +18,5 @@ npm run web-vault
 npm run check
 node tests/crypto.mjs
 node tests/auth0.mjs
+node tests/sso-entry.mjs
 npm run build
