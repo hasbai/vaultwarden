@@ -119,7 +119,9 @@ async fn fetch(mut req: Request, env: Env, ctx: Context) -> Result<Response> {
             if code >= 500 {
                 console_error!("{{\"event\":\"api_failed\",\"status\":{code}}}");
             }
-            let mut value = json!({"message":msg,"validationErrors":{"": [msg]},"object":"error"});
+            // Global errors have no indexed item validation key. The import
+            // client uses message when validationErrors is absent.
+            let mut value = json!({"message":msg,"object":"error"});
             if req.path() == "/identity/connect/token" {
                 value = json!({"error":"invalid_grant","error_description":msg,"ErrorModel":{"Message":msg,"Object":"error"}});
             }

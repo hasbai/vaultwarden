@@ -68,7 +68,7 @@ console.log('Checking invalid imports roll back and oversized imports write noth
 const before=(await ok('/api/sync')).ciphers.length;
 assert.equal((await api('/api/ciphers/import',{method:'POST',body:{folders:[],ciphers:[input,{...input,type:100}],folderRelationships:[]}})).status,400);
 assert.equal((await ok('/api/sync')).ciphers.length,before);
-assert.equal((await api('/api/ciphers/import',{method:'POST',body:{folders:[],ciphers:Array(1001).fill({...input,folderId:null}),folderRelationships:[]}})).status,413);
+assert.equal((await api('/api/ciphers/import',{method:'POST',body:{folders:[],ciphers:Array(10001).fill({...input,folderId:null}),folderRelationships:[]}})).status,413);
 await ok('/api/ciphers/import',{method:'POST',body:{folders:[{name:encrypt(Buffer.from('Imported folder'))}],ciphers:[{...input,folderId:null}],folderRelationships:[{key:0,value:0}]}});
 assert.equal((await ok('/api/sync')).ciphers.length,before+1);
 console.log('Checking refresh competition, wrong-client recovery, master-password changes and revocation');

@@ -1,5 +1,6 @@
 import app from '../build/index.js';
 const MAX_BODY = 2 * 1024 * 1024;
+const MAX_IMPORT_BODY = 8 * 1024 * 1024;
 function finish(result, request) {
   const response = new Response(result.body, result);
   response.headers.set('X-Content-Type-Options', 'nosniff');
@@ -19,15 +20,17 @@ export default class extends app {
   async fetch(request) {
     try {
       if (request.body) {
+        const isImport = new URL(request.url).pathname === '/api/ciphers/import';
+        const maxBody = isImport ? MAX_IMPORT_BODY : MAX_BODY;
         const reader = request.body.getReader();
         const chunks = []; let size = 0;
         while (true) {
           const {done, value} = await reader.read();
           if (done) break;
           size += value.byteLength;
-          if (size > MAX_BODY) {
+          if (size > maxBody) {
             await reader.cancel();
-            return finish(Response.json({message: 'Request exceeds 2 MiB'}, {status: 413}), request);
+            return finish(Response.json({message: isImport ? 'Import request exceeds 8 MiB' : 'Request exceeds 2 MiB', object: 'error'}, {status: 413}), request);
           }
           chunks.push(value);
         }

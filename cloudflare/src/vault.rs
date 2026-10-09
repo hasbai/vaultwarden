@@ -267,14 +267,54 @@ async fn bulk(env: &Env, u: &User, p: Value, action: &str) -> ApiResult<Response
     }
     empty()
 }
+// Keep each JSON binding below D1's 2 MB string limit, including JSON
+// escaping. All chunks are committed by a single transactional batch.
+#[derive(Default)]
+struct ImportChunks {
+    chunks: Vec<String>,
+    current: String,
+    total: usize,
+}
+impl ImportChunks {
+    fn push(&mut self, row: Value) -> ApiResult<()> {
+        let encoded = row.to_string();
+        if encoded.len() + 2 > 1_500_000 {
+            return Err(ApiError(413, "An encoded import record is too large"));
+        }
+        self.total += encoded.len() + 2;
+        if self.total > 10 * 1024 * 1024 {
+            return Err(ApiError(413, "Encoded import exceeds 10 MiB"));
+        }
+        if !self.current.is_empty() && self.current.len() + encoded.len() + 2 > 900_000 {
+            self.flush();
+        }
+        if self.current.is_empty() {
+            self.current.push('[');
+        } else {
+            self.current.push(',');
+        }
+        self.current.push_str(&encoded);
+        Ok(())
+    }
+    fn flush(&mut self) {
+        if !self.current.is_empty() {
+            self.current.push(']');
+            self.chunks.push(std::mem::take(&mut self.current));
+        }
+    }
+    fn finish(mut self) -> Vec<String> {
+        self.flush();
+        self.chunks
+    }
+}
 async fn import(env: &Env, u: &User, p: Value) -> ApiResult<Response> {
     if !p["organizationId"].is_null() || p["collections"].as_array().is_some_and(|a| !a.is_empty()) {
         return Err(ApiError(400, "Organization imports are unavailable"));
     }
     let items = p["ciphers"].as_array().ok_or(ApiError(400, "Missing import items"))?;
     let dirs = p["folders"].as_array().cloned().unwrap_or_default();
-    if items.len() + dirs.len() > 1000 {
-        return Err(ApiError(413, "Import at most 1000 records per request"));
+    if items.len() + dirs.len() > 10_000 {
+        return Err(ApiError(413, "Import at most 10000 records per request"));
     }
     let rev = date();
     let mut folder_rows = vec![];
@@ -293,23 +333,36 @@ async fn import(env: &Env, u: &User, p: Value) -> ApiResult<Response> {
             mapping[ci] = folder_rows[fi]["id"].clone();
         }
     }
-    let mut rows = vec![];
+    let mut item_chunks = ImportChunks::default();
     for (index, item) in items.iter().enumerate() {
         validate_cipher(item, u)?;
-        if !item["folderId"].is_null() {
+        // The Web Vault retains the export's folderId while also supplying
+        // index relationships. Only the validated mapping controls ownership.
+        if !item["folderId"].is_null() && mapping[index].is_null() {
             return Err(ApiError(400, "Use import folder relationships"));
         }
-        rows.push(json!({"id":random_id(),"folder":mapping[index],"payload":payload(item.clone()).to_string()}));
+        item_chunks
+            .push(json!({"id":random_id(),"folder":mapping[index],"payload":payload(item.clone()).to_string()}))?;
     }
-    let folder_json = json!(folder_rows).to_string();
-    let item_json = json!(rows).to_string();
-    if folder_json.len() > 900_000 || item_json.len() > 900_000 {
-        return Err(ApiError(413, "Split the encrypted import into smaller requests"));
+    let mut folder_chunks = ImportChunks {
+        total: item_chunks.total,
+        ..Default::default()
+    };
+    for row in folder_rows {
+        folder_chunks.push(row)?;
     }
-    let queries=vec![
-        ("INSERT INTO folders(id,user_id,name,revision) SELECT json_extract(value,'$.id'),?,json_extract(value,'$.name'),? FROM json_each(?)".into(),vec![u.id(),json!(rev),json!(folder_json)]),
-        ("INSERT INTO ciphers(id,user_id,folder_id,payload,created,revision) SELECT json_extract(value,'$.id'),?,json_extract(value,'$.folder'),json_extract(value,'$.payload'),?,? FROM json_each(?)".into(),vec![u.id(),json!(rev),json!(rev),json!(item_json)])
-    ];
+    let mut queries = vec![];
+    for chunk in folder_chunks.finish() {
+        queries.push(("INSERT INTO folders(id,user_id,name,revision) SELECT json_extract(value,'$.id'),?,json_extract(value,'$.name'),? FROM json_each(?)".into(),vec![u.id(),json!(rev),json!(chunk)]));
+    }
+    for chunk in item_chunks.finish() {
+        queries.push(("INSERT INTO ciphers(id,user_id,folder_id,payload,created,revision) SELECT json_extract(value,'$.id'),?,json_extract(value,'$.folder'),json_extract(value,'$.payload'),?,? FROM json_each(?)".into(),vec![u.id(),json!(rev),json!(rev),json!(chunk)]));
+    }
+    // Leave room for authentication, maintenance and transaction guards on
+    // the Free plan's 50-query invocation budget.
+    if queries.len() > 32 {
+        return Err(ApiError(413, "Import requires too many database statements"));
+    }
     db::write(env, u, queries).await?;
     empty()
 }

@@ -10,6 +10,7 @@ SSO authenticates the user; the vault master password encrypts and unlocks the v
 
 - Web Vault and Bitwarden SSO authorization-code/PKCE protocol.
 - Personal encrypted items and folders, manual/startup sync, import, favorites, trash and restore.
+- Imports accept up to 10,000 combined items/folders and 8 MiB request bodies. Validated encrypted rows are split into D1 JSON bindings within one atomic batch, bounded to 10 MiB encoded data and 32 insert statements. Global errors use the Bitwarden `message` contract.
 - Master-password/KDF changes and device-session revocation.
 - Auth0 manages account login, identity, MFA and RBAC.
 
@@ -80,6 +81,7 @@ node tests/auth0.mjs
 NODE_TLS_REJECT_UNAUTHORIZED=0 node tests/maintenance.mjs
 NODE_TLS_REJECT_UNAUTHORIZED=0 node tests/sso-protocol.mjs
 node tests/web-vault.mjs
+NODE_TLS_REJECT_UNAUTHORIZED=0 node tests/import-large.mjs
 NODE_TLS_REJECT_UNAUTHORIZED=0 node tests/integration.mjs
 node tests/web-vault.mjs # verify changed password decrypts existing data
 NODE_TLS_REJECT_UNAUTHORIZED=0 node tests/cli.mjs
