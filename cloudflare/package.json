@@ -3,10 +3,12 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "build": "worker-build --release",
+    "build": "worker-build --release . -- --locked",
+    "build:ci": "bash scripts/build-ci.sh",
     "dev": "wrangler dev",
     "deploy": "wrangler deploy",
-    "check": "cargo fmt --check && cargo clippy --target wasm32-unknown-unknown -- -D warnings",
+    "deploy:ci": "node scripts/deploy-ci.mjs",
+    "check": "cargo fmt --check && cargo clippy --locked --target wasm32-unknown-unknown -- -D warnings",
     "test": "node tests/integration.mjs",
     "web-vault": "python3 scripts/web-vault.py"
   },

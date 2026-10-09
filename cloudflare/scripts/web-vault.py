@@ -10,34 +10,34 @@ VERSION = "v2026.7.0"
 ROOT = Path(__file__).resolve().parents[1]
 CACHE = ROOT / ".secrets" / "web-release"
 NAME = f"bw_web_{VERSION}.tar.gz"
+SHA256 = "002e972bf0d0487ec0324b06d916de33e29de4c29bffd92ee3b843084c300570"
 CACHE.mkdir(parents=True, exist_ok=True)
 archive = CACHE / NAME
 if not archive.exists():
+    partial = archive.with_suffix(".part")
     subprocess.run(
         [
-            "gh",
-            "release",
-            "download",
-            VERSION,
-            "--repo",
-            "dani-garcia/bw_web_builds",
-            "--pattern",
-            NAME,
-            "--pattern",
-            "sha256sums.txt",
-            "--dir",
-            str(CACHE),
+            "curl",
+            "--fail",
+            "--location",
+            "--retry",
+            "3",
+            "--connect-timeout",
+            "30",
+            "--max-time",
+            "300",
+            "--output",
+            str(partial),
+            f"https://github.com/dani-garcia/bw_web_builds/releases/download/{VERSION}/{NAME}",
         ],
         check=True,
     )
-checksums = dict(
-    line.split()[::-1]
-    for line in (CACHE / "sha256sums.txt").read_text().splitlines()
-    if line.strip()
-)
-expected = checksums.get(NAME) or checksums.get("*" + NAME)
+    if hashlib.sha256(partial.read_bytes()).hexdigest() != SHA256:
+        partial.unlink()
+        raise SystemExit("Web Vault download checksum mismatch")
+    partial.replace(archive)
 actual = hashlib.sha256(archive.read_bytes()).hexdigest()
-if expected != actual:
+if SHA256 != actual:
     raise SystemExit("Web Vault checksum mismatch")
 with tarfile.open(archive) as tar:
     tar.extractall(ROOT, filter="data")

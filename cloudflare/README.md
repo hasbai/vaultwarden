@@ -17,7 +17,7 @@ Organizations, collections, attachments, Send, emergency access, native account 
 
 ## Reproduce
 
-Requirements: Rust 1.95.0, `wasm32-unknown-unknown`, `worker-build 0.8.7`, Node/npm, GitHub CLI for the pinned Web Vault release, authenticated Wrangler/Auth0 CLI.
+Requirements: Rust 1.95.0, `wasm32-unknown-unknown`, `worker-build 0.8.7`, Node/npm, Python 3.13+ and curl for the pinned Web Vault release, authenticated Wrangler/Auth0 CLI.
 
 ```sh
 npm ci
@@ -37,6 +37,16 @@ Generated credentials, tokens, local data and Web Vault downloads are ignored. P
 `scripts/auth0-setup.mjs` preserves existing callbacks, scopes and permissions, adds only this application's callback and `access:vaultwarden`, and grants it to the existing `superadmin` role. The application checks the permission, not role names.
 
 ## Deployment and backups
+
+### GitHub automatic builds
+
+Cloudflare Workers Builds connects `hasbai/vaultwarden` to the existing `vaultwarden` Worker. The production branch is `codex/cloudflare-auth0-d1`, with root directory `cloudflare`, build command `npm run build:ci` and deploy command `npm run deploy:ci`. Only changes under `cloudflare/**` trigger production builds; other branches and PR previews are disabled. `main` still contains the original native server.
+
+The build image uses Node 22.23.2 and Python 3.13.3. Dependencies install with the committed npm lockfile. The build script installs pinned Rust 1.95.0 and worker-build 0.8.7, downloads the public Web Vault release with a fixed SHA256, runs formatting/Clippy and isolated crypto/Auth0 checks, then compiles WASM. Wrangler may repeat the cached custom build during deployment. No GitHub download credentials or production runtime secrets are needed by the build script.
+
+The existing D1 binding and three Worker secrets are retained. Automatic builds do not initialize secrets, modify Auth0, apply database migrations or run browser tests against production. Apply future D1 migrations as a separately reviewed deployment step.
+
+[Workers Builds configuration](https://developers.cloudflare.com/workers/ci-cd/builds/configuration/) · [Build image](https://developers.cloudflare.com/workers/ci-cd/builds/build-image/)
 
 The target is `https://bw.hasbai.xyz`. Configure the actual D1 database ID in `wrangler.jsonc`, apply the D1 migrations, upload `.secrets/production.json` through Wrangler's protected secrets file mechanism, then deploy the built Worker and assets with `npx wrangler deploy --secrets-file .secrets/production.json`. Validate the remote API and SSO before using real passwords.
 
