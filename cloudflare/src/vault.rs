@@ -316,7 +316,7 @@ async fn import(env: &Env, u: &User, p: Value) -> ApiResult<Response> {
 async fn change_password(req: &mut Request, env: &Env, u: &User) -> ApiResult<Response> {
     auth::throttle(req, env, "password", 10).await?;
     let p = body(req).await?;
-    auth::check_password(u, required(&p, "masterPasswordHash")?).await?;
+    auth::check_password(u, env, required(&p, "masterPasswordHash")?).await?;
     let a = &p["authenticationData"];
     let unlock = &p["unlockData"];
     let (hash, key, params) = if a.is_object() && unlock.is_object() {
@@ -355,7 +355,7 @@ async fn change_password(req: &mut Request, env: &Env, u: &User) -> ApiResult<Re
         return Err(ApiError(400, "Use the KDF endpoint to change derivation parameters"));
     }
     let salt = random_secret().replace('-', "+").replace('_', "/");
-    let verifier = js_string(password_hash(hash, &salt).await)?;
+    let verifier = auth::verifier(env, &u.data, hash, &salt).await?;
     let (kind, it, memory, parallelism) = params;
     db::write(env,u,vec![("UPDATE users SET verifier=?,salt=?,wrapped_key=?,hint=?,kdf=?,iterations=?,memory=?,parallelism=?,stamp=? WHERE id=?".into(),vec![json!(verifier),json!(salt),json!(key),nullable(&p,"masterPasswordHint"),kind,it,memory,parallelism,json!(random_id()),u.id()]),("DELETE FROM sessions WHERE user_id=?".into(),vec![u.id()])]).await?;
     empty()
@@ -381,12 +381,13 @@ pub async fn route(req: &mut Request, env: &Env, u: &User) -> ApiResult<Response
         if !text(&u.data, "wrapped_key").is_empty() || !u.data["verifier"].is_null() {
             return Err(ApiError(409, "Vault is already initialized"));
         }
+        auth::account_throttle(u, env).await?;
         let p = body(req).await?;
         let (kind, it, memory, parallelism) = auth::kdf(&p)?;
         let key = required(&p, "key")?;
         let hash = required(&p, "masterPasswordHash")?;
         let salt = random_secret().replace('-', "+").replace('_', "/");
-        let verifier = js_string(password_hash(hash, &salt).await)?;
+        let verifier = auth::verifier(env, &u.data, hash, &salt).await?;
         let private = required(&p["keys"], "encryptedPrivateKey")?;
         let public = required(&p["keys"], "publicKey")?;
         db::write(env,u,vec![db::assertion("SELECT COUNT(*) FROM users WHERE id=? AND wrapped_key='' AND verifier IS NULL",vec![u.id()]),("UPDATE users SET verifier=?,salt=?,wrapped_key=?,private_key=?,public_key=?,kdf=?,iterations=?,memory=?,parallelism=?,hint=? WHERE id=?".into(),vec![json!(verifier),json!(salt),json!(key),json!(private),json!(public),kind,it,memory,parallelism,nullable(&p,"masterPasswordHint"),u.id()])]).await?;
@@ -455,12 +456,12 @@ pub async fn route(req: &mut Request, env: &Env, u: &User) -> ApiResult<Response
     if path == "/api/accounts/verify-password" && method == Method::Post {
         auth::throttle(req, env, "password", 10).await?;
         let p = body(req).await?;
-        auth::check_password(u, required(&p, "masterPasswordHash")?).await?;
+        auth::check_password(u, env, required(&p, "masterPasswordHash")?).await?;
         return empty();
     }
     if path == "/api/accounts/security-stamp" && method == Method::Post {
         let p = body(req).await?;
-        auth::check_password(u, required(&p, "masterPasswordHash")?).await?;
+        auth::check_password(u, env, required(&p, "masterPasswordHash")?).await?;
         db::write(
             env,
             u,
@@ -553,7 +554,7 @@ pub async fn route(req: &mut Request, env: &Env, u: &User) -> ApiResult<Response
     }
     if path == "/api/ciphers/purge" && matches!(method, Method::Post | Method::Put) {
         let p = body(req).await?;
-        auth::check_password(u, required(&p, "masterPasswordHash")?).await?;
+        auth::check_password(u, env, required(&p, "masterPasswordHash")?).await?;
         db::write(
             env,
             u,

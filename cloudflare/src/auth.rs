@@ -65,10 +65,29 @@ pub async fn throttle(req: &Request, env: &Env, kind: &str, limit: i64) -> ApiRe
     }
     Ok(())
 }
-pub async fn check_password(user: &User, password: &str) -> ApiResult<()> {
-    let actual = js_string(password_hash(password, text(&user.data, "salt")).await)?;
+pub async fn check_password(user: &User, env: &Env, password: &str) -> ApiResult<()> {
+    account_throttle(user, env).await?;
+    if !text(&user.data, "verifier").starts_with("hmac-sha256:v1:") {
+        return Err(ApiError(403, "Unsupported vault verifier"));
+    }
+    let actual = verifier(env, &user.data, password, text(&user.data, "salt")).await?;
     if !secure_equal(&actual, text(&user.data, "verifier")).await? {
         return Err(ApiError(400, "Invalid password"));
+    }
+    Ok(())
+}
+pub async fn verifier(env: &Env, user: &Value, client_hash: &str, salt: &str) -> ApiResult<String> {
+    js_string(
+        password_hash(client_hash, salt, required(user, "id")?, &env.secret("VAULT_VERIFIER_KEY")?.to_string()).await,
+    )
+    .map_err(|_| ApiError(400, "Invalid client authentication hash or verifier configuration"))
+}
+pub async fn account_throttle(user: &User, env: &Env) -> ApiResult<()> {
+    let key = format!("vault-password:{}", required(&user.data, "id")?);
+    let window = time_ms() / 60000;
+    let row=db::one(env,"INSERT INTO throttle(key,window,count) VALUES(?,?,1) ON CONFLICT(key) DO UPDATE SET count=CASE WHEN window=excluded.window THEN count+1 ELSE 1 END,window=excluded.window RETURNING count",&[json!(key),json!(window)]).await?.ok_or(ApiError(500,"Rate limit failed"))?;
+    if row["count"].as_i64().unwrap_or(11) > 10 {
+        return Err(ApiError(429, "Too many password attempts; wait one minute"));
     }
     Ok(())
 }

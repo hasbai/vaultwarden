@@ -23,7 +23,12 @@ unsafe extern "C" {
     #[wasm_bindgen(catch)]
     async fn equal(a: &str, b: &str) -> std::result::Result<JsValue, JsValue>;
     #[wasm_bindgen(catch, js_name = passwordHash)]
-    async fn password_hash(password: &str, salt: &str) -> std::result::Result<JsValue, JsValue>;
+    async fn password_hash(
+        password: &str,
+        salt: &str,
+        user_id: &str,
+        secret: &str,
+    ) -> std::result::Result<JsValue, JsValue>;
     #[wasm_bindgen(catch, js_name = signJwt)]
     async fn sign_jwt(claims: &str, jwk: &str) -> std::result::Result<JsValue, JsValue>;
     #[wasm_bindgen(catch, js_name = verifyJwt)]
@@ -100,7 +105,13 @@ pub(crate) fn list(values: Vec<Value>) -> Value {
 }
 
 #[event(fetch)]
-async fn fetch(mut req: Request, env: Env, _ctx: Context) -> Result<Response> {
+async fn fetch(mut req: Request, env: Env, ctx: Context) -> Result<Response> {
+    if req.path().starts_with("/api/") || req.path().starts_with("/identity/") {
+        let maintenance_env = env.clone();
+        ctx.wait_until(async move {
+            daily_cleanup(&maintenance_env).await;
+        });
+    }
     let result = route(&mut req, &env).await;
     match result {
         Ok(r) => Ok(r),
@@ -187,15 +198,49 @@ async fn route(req: &mut Request, env: &Env) -> ApiResult<Response> {
 
 #[event(scheduled)]
 async fn scheduled(_event: ScheduledEvent, env: Env, _ctx: ScheduleContext) {
+    cleanup(&env).await;
+}
+async fn daily_cleanup(env: &Env) {
+    let day = time_ms() / 86400000;
+    let lease = time_ms() / 1000;
+    let claim = db::one(env,"INSERT INTO throttle(key,window,count) VALUES('__maintenance',-1,?) ON CONFLICT(key) DO UPDATE SET count=excluded.count WHERE throttle.window<? AND throttle.count<excluded.count-300 RETURNING count",&[json!(lease),json!(day)]).await;
+    match claim {
+        Ok(Some(_)) => {
+            if cleanup(env).await {
+                let _ = db::batch(
+                    env,
+                    vec![(
+                        "UPDATE throttle SET window=? WHERE key='__maintenance' AND count=?".into(),
+                        vec![json!(day), json!(lease)],
+                    )],
+                )
+                .await;
+            } else {
+                let _ = db::batch(
+                    env,
+                    vec![(
+                        "UPDATE throttle SET count=? WHERE key='__maintenance' AND count=?".into(),
+                        vec![json!(lease - 240), json!(lease)],
+                    )],
+                )
+                .await;
+            }
+        }
+        Ok(None) => {}
+        Err(_) => console_error!("{{\"event\":\"cleanup_claim_failed\"}}"),
+    }
+}
+async fn cleanup(env: &Env) -> bool {
     let cutoff = iso_date((time_ms() - 30 * 86400 * 1000) as f64);
-    let result=db::batch(&env,vec![
+    let result=db::batch(env,vec![
         ("UPDATE users SET revision=MAX(revision+1,?) WHERE id IN (SELECT user_id FROM ciphers WHERE deleted IS NOT NULL AND deleted<?)".into(),vec![json!(time_ms()),json!(cutoff)]),
         ("DELETE FROM ciphers WHERE deleted IS NOT NULL AND deleted<?".into(),vec![json!(cutoff)]),
         ("DELETE FROM sessions WHERE expires<?".into(),vec![json!(time_ms()/1000)]),
         ("DELETE FROM sso_pending WHERE expires<?".into(),vec![json!(time_ms()/1000)]),
-        ("DELETE FROM throttle WHERE window<?".into(),vec![json!(time_ms()/60000-60)])
+        ("DELETE FROM throttle WHERE key!='__maintenance' AND window<?".into(),vec![json!(time_ms()/60000-60)])
     ]).await;
     if result.is_err() {
         console_error!("{{\"event\":\"cleanup_failed\"}}");
     }
+    result.is_ok()
 }

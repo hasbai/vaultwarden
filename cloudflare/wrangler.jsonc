@@ -33,6 +33,5 @@
     "enabled": true,
     "logs": { "invocation_logs": false },
     "traces": { "enabled": true, "head_sampling_rate": 0.1 }
-  },
-  "triggers": { "crons": ["17 3 * * *"] }
+  }
 }

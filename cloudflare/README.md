@@ -32,7 +32,7 @@ npx wrangler d1 migrations apply vaultwarden --local --persist-to test-results/d
 npx wrangler dev --local --local-protocol https --persist-to test-results/d1-live --var DOMAIN:https://localhost:8787
 ```
 
-Generated credentials, tokens, local data and Web Vault downloads are ignored. Production secrets are `JWT_JWK` (protocol signing) and `TOKEN_ENCRYPTION_KEY` (AES-GCM encryption of upstream credentials). Changing the encryption key invalidates stored Auth0 sessions. Never commit or log `.secrets/` or `.dev.vars`.
+Generated credentials, tokens, local data and Web Vault downloads are ignored. Production secrets are `JWT_JWK` (protocol signing), `TOKEN_ENCRYPTION_KEY` (AES-GCM encryption of upstream credentials), and `VAULT_VERIFIER_KEY` (independent 256-bit verifier pepper). Changing the encryption key invalidates stored Auth0 sessions. Never commit or log `.secrets/` or `.dev.vars`.
 
 `scripts/auth0-setup.mjs` preserves existing callbacks, scopes and permissions, adds only this application's callback and `access:vaultwarden`, and grants it to the existing `superadmin` role. The application checks the permission, not role names.
 
@@ -44,7 +44,7 @@ The target is `https://bw.hasbai.xyz`. Configure the actual D1 database ID in `w
 npx wrangler d1 export vaultwarden --remote --output=.secrets/vault-backup.sql
 ```
 
-Restore only to an isolated database first. Keep the backup confidential: it contains encrypted vault data and credential verifiers, even though it does not contain plaintext vault passwords. Worker rollback does not roll back D1. The scheduled cleanup removes items after 30 days in trash and expired sessions/SSO transactions.
+Restore only to an isolated database first. Keep the backup confidential: it contains encrypted vault data and credential verifiers, even though it does not contain plaintext vault passwords. Worker rollback does not roll back D1. The first API/SSO traffic after a UTC day change triggers background cleanup of items past 30 days in trash and expired sessions/SSO transactions. A five-minute lease prevents concurrent cleanup and allows takeover after interrupted work; explicit failures back off for one minute before retry. No cron slots are required; idle days do not run cleanup.
 
 
 ## Acceptance
@@ -67,10 +67,23 @@ Browser tests use existing test credentials from `AUTH0_TEST_ENV_FILE` (local de
 ```sh
 node tests/crypto.mjs
 node tests/auth0.mjs
+NODE_TLS_REJECT_UNAUTHORIZED=0 node tests/maintenance.mjs
 NODE_TLS_REJECT_UNAUTHORIZED=0 node tests/sso-protocol.mjs
 node tests/web-vault.mjs
 NODE_TLS_REJECT_UNAUTHORIZED=0 node tests/integration.mjs
 node tests/web-vault.mjs # verify changed password decrypts existing data
 NODE_TLS_REJECT_UNAUTHORIZED=0 node tests/cli.mjs
-node tests/production.mjs
+NODE_TLS_REJECT_UNAUTHORIZED=0 node tests/verifier-rate.mjs
+node --use-env-proxy tests/production.mjs
 ```
+
+
+### Master-password rechecks on Workers
+
+The browser/client still derives encryption keys using its PBKDF2/Argon2 KDF; default PBKDF2 remains 600,000 iterations. Auth0 alone authenticates identities. For sensitive vault operations, the server stores `hmac-sha256:v1:<base64url>` of the canonical 32-byte client authentication hash with an independent pepper. The HMAC input is a JSON array containing a fixed purpose, version, vault ID, random salt and client hash. Rechecks require Auth0, rate limits per account and IP where applicable, and a constant-time comparison.
+
+This replaces additional server-side PBKDF2: the production runtime rejected 600,000 server iterations even though local workerd accepted them. No production vault verifier existed at migration. Unknown/legacy verifier formats are rejected; no automatic plaintext or weaker-hash fallback exists. Local fixtures were recreated and verified with the new format.
+
+Back up the pepper separately from D1. Rotation requires the previous pepper and a fresh client authentication hash from each vault owner; do not overwrite it without a migration. Loss of the pepper prevents server rechecks until it is recovered, but it does not expose or recover the vault master password. The operator cannot decrypt a vault or restore a forgotten master password. If both D1 and pepper leak, resistance to password guesses relies on the client KDF/key wrapping, rather than an extra server PBKDF2 step.
+
+The isolated production crypto benchmark completed 10 successful requests (single and double HMAC rechecks plus RSA JWT sign/verify), with recorded CPU times of 1–2 ms. The temporary benchmark Worker was removed after verification.

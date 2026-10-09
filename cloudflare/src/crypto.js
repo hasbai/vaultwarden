@@ -14,9 +14,12 @@ export async function equal(a,b) {
   const [ah,bh] = await Promise.all([crypto.subtle.digest('SHA-256',enc.encode(a)),crypto.subtle.digest('SHA-256',enc.encode(b))]);
   return crypto.subtle.timingSafeEqual(ah,bh);
 }
-export async function passwordHash(password, salt) {
-  const key = await crypto.subtle.importKey('raw', enc.encode(password), 'PBKDF2', false, ['deriveBits']);
-  return b64(await crypto.subtle.deriveBits({ name:'PBKDF2', hash:'SHA-256', salt:unb64(salt), iterations:600000 }, key, 256));
+export async function passwordHash(clientHash, salt, userId, secret) {
+  const bytes=unb64(clientHash);
+  if(bytes.length!==32 || b64(bytes)!==clientHash || !userId || fromurl(secret).length!==32) throw new Error('Invalid verifier input');
+  const key=await crypto.subtle.importKey('raw',fromurl(secret),{name:'HMAC',hash:'SHA-256'},false,['sign']);
+  const input=JSON.stringify(['vaultwarden-master-password-recheck','v1',userId,salt,clientHash]);
+  return 'hmac-sha256:v1:'+b64url(await crypto.subtle.sign('HMAC',key,enc.encode(input)));
 }
 export async function signJwt(claims, jwk) {
   claims = JSON.parse(claims);

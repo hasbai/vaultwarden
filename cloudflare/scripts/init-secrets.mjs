@@ -10,6 +10,7 @@ for (const name of ['local','production']) {
     secrets = {JWT_JWK:JSON.stringify(privateKey.export({format:'jwk'}))};
   }
   delete secrets.BOOTSTRAP_TOKEN;
+  secrets.VAULT_VERIFIER_KEY ??= randomBytes(32).toString('base64url');
   secrets.TOKEN_ENCRYPTION_KEY ??= randomBytes(32).toString('base64url');
   writeFileSync(path,JSON.stringify(secrets),{mode:0o600});
   if(name==='local') writeFileSync('.dev.vars',Object.entries(secrets).map(([k,v])=>`${k}='${v}'`).join('\n')+'\n',{mode:0o600});
