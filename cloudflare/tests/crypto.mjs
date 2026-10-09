@@ -1,0 +1,15 @@
+import assert from 'node:assert/strict';
+import {generateKeyPairSync,randomBytes} from 'node:crypto';
+import {signJwt,verifyJwt,seal,unseal} from '../src/crypto.js';
+const {privateKey}=generateKeyPairSync('rsa',{modulusLength:2048});
+const jwk=JSON.stringify(privateKey.export({format:'jwk'}));
+const claims={iss:'https://local.test|login',purpose:'login',sub:'vault-user',sid:'session',nbf:Math.floor(Date.now()/1000),exp:Math.floor(Date.now()/1000)+60};
+const signed=await signJwt(JSON.stringify(claims),jwk);
+assert.deepEqual(JSON.parse(await verifyJwt(signed,jwk,claims.iss,claims.purpose)),claims);
+await assert.rejects(()=>verifyJwt(signed,jwk,claims.iss,'sso'));
+await assert.rejects(()=>verifyJwt(signed.slice(0,-12)+'invalid',jwk,claims.iss,claims.purpose));
+const key=randomBytes(32).toString('base64url');
+const box=await seal('upstream-test-credential',key,'session-a');
+assert.equal(await unseal(box,key,'session-a'),'upstream-test-credential');
+await assert.rejects(()=>unseal(box,key,'session-b'));
+console.log('Protocol JWT string bridge and encrypted credential session binding passed.');

@@ -1,0 +1,38 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "vaultwarden",
+  "account_id": "5cecc63c78acf8f5473f8745f4244448",
+  "main": "src/entry.js",
+  "compatibility_date": "2026-10-09",
+  "workers_dev": false,
+  "preview_urls": false,
+  "build": { "command": "npm run build", "watch_dir": "src" },
+  "routes": [{ "pattern": "bw.hasbai.xyz", "custom_domain": true }],
+  "assets": {
+    "directory": "web-vault",
+    "binding": "ASSETS",
+    "run_worker_first": true,
+    "html_handling": "none",
+    "not_found_handling": "single-page-application"
+  },
+  "vars": {
+    "DOMAIN": "https://bw.hasbai.xyz",
+    "AUTH0_DOMAIN": "auth.hasbai.xyz",
+    "AUTH0_CLIENT_ID": "mdmD7xvX5yay52SRVZeuIOhGHIa0Wdl2",
+    "AUTH0_AUDIENCE": "https://financial.hasbai.xyz/api",
+    "AUTH0_ORGANIZATION_ID": "org_qR4E7HTZE1Zv10go",
+    "AUTH0_PERMISSION": "access:vaultwarden"
+  },
+  "d1_databases": [{
+    "binding": "DB",
+    "database_name": "vaultwarden",
+    "database_id": "94f3f866-8afe-4fb3-84ab-6af5c98542d4",
+    "migrations_dir": "migrations"
+  }],
+  "observability": {
+    "enabled": true,
+    "logs": { "invocation_logs": false },
+    "traces": { "enabled": true, "head_sampling_rate": 0.1 }
+  },
+  "triggers": { "crons": ["17 3 * * *"] }
+}

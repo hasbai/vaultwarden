@@ -1,0 +1,19 @@
+{
+  "name": "vaultwarden-cloudflare",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "worker-build --release",
+    "dev": "wrangler dev",
+    "deploy": "wrangler deploy",
+    "check": "cargo fmt --check && cargo clippy --target wasm32-unknown-unknown -- -D warnings",
+    "test": "node tests/integration.mjs",
+    "web-vault": "python3 scripts/web-vault.py"
+  },
+  "devDependencies": {
+    "@bitwarden/cli": "2026.7.0",
+    "jose": "6.2.2",
+    "playwright": "1.58.2",
+    "wrangler": "4.149.0"
+  }
+}

@@ -1,0 +1,9 @@
+/* Match upstream's SSO-only UI and hide features excluded from this port. */
+.vw-email-continue,.vw-continue-login,.vw-or-text,.vw-other-login,.vw-passkey-login,.vw-password-hint,
+app-root a[routerlink="/signup"],a[routerlink="/hint"],
+bit-nav-item[route="sends"],bit-nav-item[route="settings/two-factor"],
+bit-nav-item[route="settings/emergency-access"],bit-nav-item[route="settings/subscription"],
+app-user-layout app-password-settings app-webauthn-login-settings,
+div:has(>app-change-email),a[href$="/settings/sponsored-families"],
+button[data-testid="new-organization"],bit-nav-item[route="organizations"],
+bit-form-field:has(.vw-email-sso),bit-form-control:has([formcontrolname="rememberEmail"]) {display:none!important}
