@@ -21,6 +21,7 @@ Organizations, collections, attachments, Send, emergency access, native account 
 Requirements: Rust 1.95.0, `wasm32-unknown-unknown`, `worker-build 0.8.7`, Node/npm, Python 3.13+ and curl for the pinned Web Vault release, authenticated Wrangler/Auth0 CLI.
 
 ```sh
+cd cloudflare
 npm ci
 cargo install worker-build --version 0.8.7 --locked
 npm run web-vault
@@ -39,9 +40,15 @@ Generated credentials, tokens, local data and Web Vault downloads are ignored. P
 
 ## Deployment and backups
 
+### Branch and production policy
+
+`cloudflare` is this fork's primary branch locally and the default branch on GitHub. Start future work from it and merge changes or target pull requests back into `cloudflare`. `main` retains the original native server history as an upstream reference.
+
+Production at `https://bw.hasbai.xyz` deploys only from `cloudflare`. Use `npm run deploy:ci` for Workers Builds and `npm run deploy` for an explicitly requested manual deployment; both run the same branch guard. Local deployments require an attached `cloudflare` checkout. Workers Builds may use a detached checkout, but must supply `WORKERS_CI_BRANCH=cloudflare` and a `WORKERS_CI_COMMIT_SHA` matching the checkout. Missing or conflicting source information stops deployment before Wrangler starts. Do not bypass these entry points with a direct Wrangler deployment.
+
 ### GitHub automatic builds
 
-Cloudflare Workers Builds connects `hasbai/vaultwarden` to the existing `vaultwarden` Worker. The production branch is `codex/cloudflare-auth0-d1`, with root directory `cloudflare`, build command `npm run build:ci` and deploy command `npm run deploy:ci`. Only changes under `cloudflare/**` trigger production builds; other branches and PR previews are disabled. `main` still contains the original native server.
+Cloudflare Workers Builds connects `hasbai/vaultwarden` to the existing `vaultwarden` Worker. Its trigger follows the [branch and production policy](#branch-and-production-policy), with root directory `cloudflare`, build command `npm run build:ci` and deploy command `npm run deploy:ci`. Only changes under `cloudflare/**` trigger production builds; other branches and PR previews are disabled. The production branch filter is an external Workers Builds setting and must be maintained together with the GitHub default branch.
 
 The build image uses Node 22.23.2 and Python 3.13.3. Dependencies install with the committed npm lockfile. The build script installs pinned Rust 1.95.0 and worker-build 0.8.7, downloads the public Web Vault release with a fixed SHA256, runs formatting/Clippy and isolated crypto/Auth0 checks, then compiles WASM. Wrangler may repeat the cached custom build during deployment. No GitHub download credentials or production runtime secrets are needed by the build script.
 
@@ -49,7 +56,7 @@ The existing D1 binding and three Worker secrets are retained. Automatic builds 
 
 [Workers Builds configuration](https://developers.cloudflare.com/workers/ci-cd/builds/configuration/) · [Build image](https://developers.cloudflare.com/workers/ci-cd/builds/build-image/)
 
-The target is `https://bw.hasbai.xyz`. Configure the actual D1 database ID in `wrangler.jsonc`, apply the D1 migrations, upload `.secrets/production.json` through Wrangler's protected secrets file mechanism, then deploy the built Worker and assets with `npx wrangler deploy --secrets-file .secrets/production.json`. Validate the remote API and SSO before using real passwords.
+The target is `https://bw.hasbai.xyz`. For initial provisioning, configure the actual D1 database ID in `wrangler.jsonc`, apply the D1 migrations, then deploy the built Worker and assets with `npm run deploy -- --secrets-file .secrets/production.json`. Routine deployments retain the existing Worker secrets. Validate the remote API and SSO before using real passwords.
 
 ```sh
 npx wrangler d1 export vaultwarden --remote --output=.secrets/vault-backup.sql
@@ -78,6 +85,7 @@ Browser-extension SSO opens the Web Vault with client callback and PKCE paramete
 Browser tests use existing test credentials from `AUTH0_TEST_ENV_FILE` (local default is the North Station checkout `.env`); never commit these credentials. Local test master passwords and session tokens are written only to ignored `.secrets/` files. Local HTTPS uses Wrangler's development certificate; the following TLS exception is restricted to these local tests. Production tests use normal certificate verification and stop before setting a master password.
 
 ```sh
+node tests/deploy-branch.mjs
 node tests/crypto.mjs
 node tests/auth0.mjs
 node tests/sso-entry.mjs

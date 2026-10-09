@@ -16,6 +16,7 @@ rustup toolchain install "$RUSTUP_TOOLCHAIN" --profile minimal --component rustf
 cargo install worker-build --version 0.8.7 --locked
 npm run web-vault
 npm run check
+node tests/deploy-branch.mjs
 node tests/crypto.mjs
 node tests/auth0.mjs
 node tests/sso-entry.mjs

@@ -1,3 +1,13 @@
+# Vaultwarden on Cloudflare
+
+This fork serves a personal encrypted vault at [bw.hasbai.xyz](https://bw.hasbai.xyz), using Rust Workers, Cloudflare D1 and 北极小站 Auth0 SSO. The Web Vault supports personal items, folders, import, trash and restore. Bitwarden clients use server URL `https://bw.hasbai.xyz` and SSO identifier `hasbai`; initialize the vault master password in the Web Vault first.
+
+See [the Cloudflare guide](cloudflare/README.md) for supported features, local setup, deployment and backups. Organizations, attachments, Send and real-time notifications are outside this Worker's current scope. Its D1 schema is independent of native Vaultwarden databases.
+
+## Native Vaultwarden reference
+
+The following upstream documentation describes the original native server and its container images. Its feature list and Docker instructions apply to that server; use the Cloudflare guide above for this fork's hosted service.
+
 ![Vaultwarden Logo](./resources/vaultwarden-logo-auto.svg)
 
 An alternative server implementation of the Bitwarden Client API, written in Rust and compatible with [official Bitwarden clients](https://bitwarden.com/download/) [[disclaimer](#disclaimer)], perfect for self-hosted deployment where running the official resource-heavy service might not be ideal.

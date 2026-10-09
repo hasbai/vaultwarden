@@ -6,7 +6,7 @@
     "build": "worker-build --release . -- --locked",
     "build:ci": "bash scripts/build-ci.sh",
     "dev": "wrangler dev",
-    "deploy": "wrangler deploy",
+    "deploy": "node scripts/deploy-ci.mjs",
     "deploy:ci": "node scripts/deploy-ci.mjs",
     "check": "cargo fmt --check && cargo clippy --locked --target wasm32-unknown-unknown -- -D warnings",
     "test": "node tests/integration.mjs",
