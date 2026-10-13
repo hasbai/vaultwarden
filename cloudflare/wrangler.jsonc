@@ -21,7 +21,7 @@
     "AUTH0_CLIENT_ID": "mdmD7xvX5yay52SRVZeuIOhGHIa0Wdl2",
     "AUTH0_AUDIENCE": "https://financial.hasbai.xyz/api",
     "AUTH0_ORGANIZATION_ID": "org_qR4E7HTZE1Zv10go",
-    "AUTH0_PERMISSION": "access:vaultwarden"
+    "AUTH0_PERMISSION": "vaultwarden.all:all"
   },
   "d1_databases": [{
     "binding": "DB",

@@ -2,7 +2,7 @@
 
 Rust Workers (`workers-rs`) + D1 + pinned Vaultwarden Web Vault. The original native server is unchanged.
 
-Identity belongs to 北极小站 Auth0: `auth.hasbai.xyz`, shared public client and organization, shared API audience with the dedicated `access:vaultwarden` permission. Local identity registration, password login, API-key login and email recovery are disabled. Each Auth0 subject owns a separate personal vault; matching email addresses never link accounts. Auth0 credentials are encrypted in D1 with a Workers Secret and never returned to Bitwarden clients. The Bitwarden compatibility JWT references the server-side session and carries client profile metadata; it contains no upstream Auth0 credentials. Each API request verifies the stored upstream access JWT and permission. RBAC changes take effect on refresh or token expiry (the shared API currently issues 1-hour access tokens).
+Identity belongs to 北极小站 Auth0: `auth.hasbai.xyz`, shared public client and organization, shared API audience with the dedicated `vaultwarden.all:all` permission. Local identity registration, password login, API-key login and email recovery are disabled. Each Auth0 subject owns a separate personal vault; matching email addresses never link accounts. Auth0 credentials are encrypted in D1 with a Workers Secret and never returned to Bitwarden clients. The Bitwarden compatibility JWT references the server-side session and carries client profile metadata; it contains no upstream Auth0 credentials. Each API request verifies the stored upstream access JWT and permission. RBAC changes take effect on refresh or token expiry (the shared API currently issues 1-hour access tokens).
 
 SSO authenticates the user; the vault master password encrypts and unlocks the vault. First SSO opens the stock Web Vault's initial master-password screen. No initial-registration credential is needed. The stored KDF salt is stable even if the identity email later changes; email/salt changes require a future encryption-key migration.
 
@@ -36,7 +36,7 @@ npx wrangler dev --local --local-protocol https --persist-to test-results/d1-liv
 
 Generated credentials, tokens, local data and Web Vault downloads are ignored. Production secrets are `JWT_JWK` (protocol signing), `TOKEN_ENCRYPTION_KEY` (AES-GCM encryption of upstream credentials), and `VAULT_VERIFIER_KEY` (independent 256-bit verifier pepper). Changing the encryption key invalidates stored Auth0 sessions. Never commit or log `.secrets/` or `.dev.vars`.
 
-`scripts/auth0-setup.mjs` preserves existing callbacks, scopes and permissions, adds only this application's callback and `access:vaultwarden`, and grants it to the existing `superadmin` role. The application checks the permission, not role names.
+`scripts/auth0-setup.mjs` keeps existing callbacks and unrelated permissions. It replaces the retired permission with `vaultwarden.all:all` and grants it to the existing `superadmin` role. The application checks the permission, not role names. It does not accept the old permission name.
 
 ## Deployment and backups
 
